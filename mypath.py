@@ -18,16 +18,16 @@ class Path(object):
             return root_dir, output_dir
         elif database == 'kaggle':
             # folder that contains class labels
-            root_dir = './dataloaders/deepfake-detection-challenge/train'
+            root_dir = '../Downloads/deepfake-detection-challenge/train'
 
             output_dir = './dataloaders/deepfake-processed'
 
             return root_dir, output_dir
         elif database == 'celeb-df':
             # folder that contains class labels
-            root_dir = './dataloaders/Celeb-DF-v2'
+            root_dir = '../Downloads/Celeb-df-cropped'
 
-            output_dir = './dataloaders/Celeb-DF-v2-processed'
+            output_dir = '../Downloads/Celeb-DF-v2-flow-processed-cropped'
 
             return root_dir, output_dir
         else:

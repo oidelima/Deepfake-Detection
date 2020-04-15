@@ -4,27 +4,33 @@ import socket
 import os
 import glob
 from tqdm import tqdm
+from tensorboardX import SummaryWriter
 
 import torch
 from torch import nn, optim
 from torch.utils.data import DataLoader
 from torch.autograd import Variable
+import torchvision.models as models
 
 from dataloaders.dataset import VideoDataset
-from network import C3D_model, R2Plus1D_model, R3D_model
+from network import C3D_model, R2Plus1D_model, R3D_model, I3D
 
 from sklearn.metrics import roc_curve, auc
 import matplotlib.pyplot as plt
 import numpy as np
+import pickle
+
+
+
 
 # Use GPU if available else revert to CPU
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print("Device being used:", device)
 
-nEpochs = 100  # Number of epochs for training
+nEpochs = 10  # Number of epochs for training
 resume_epoch = 0  # Default is 0, change if want to resume
 useTest = True # See evolution of the test set when training
-nTestInterval = 5 # Run on test set every nTestInterval epochs
+nTestInterval = 1 # Run on test set every nTestInterval epochs
 snapshot = 1 # Store a model every snapshot epochs
 lr = 1e-3 # Learning rate
 
@@ -53,7 +59,7 @@ else:
     run_id = int(runs[-1].split('_')[-1]) + 1 if runs else 0
 
 save_dir = os.path.join(save_dir_root, 'run', 'run_' + str(run_id))
-modelName = 'C3D' # Options: C3D or R2Plus1D or R3D
+modelName = 'C3D' # Options: C3D or R2Plus1D or R3D or I3D
 saveName = modelName + '-' + dataset
 
 def train_model(dataset=dataset, save_dir=save_dir, num_classes=num_classes, lr=lr,
@@ -69,12 +75,27 @@ def train_model(dataset=dataset, save_dir=save_dir, num_classes=num_classes, lr=
         train_params = [{'params': C3D_model.get_1x_lr_params(model), 'lr': lr},
                         {'params': C3D_model.get_10x_lr_params(model), 'lr': lr * 10}]
     elif modelName == 'R2Plus1D':
-        model = R2Plus1D_model.R2Plus1DClassifier(num_classes=num_classes, layer_sizes=(2, 2, 2, 2))
-        train_params = [{'params': R2Plus1D_model.get_1x_lr_params(model), 'lr': lr},
-                        {'params': R2Plus1D_model.get_10x_lr_params(model), 'lr': lr * 10}]
-    elif modelName == 'R3D':
-        model = R3D_model.R3DClassifier(num_classes=num_classes, layer_sizes=(2, 2, 2, 2))
+        # model = R2Plus1D_model.R2Plus1DClassifier(num_classes=num_classes, layer_sizes=(2, 2, 2, 2))
+        # train_params = [{'params': R2Plus1D_model.get_1x_lr_params(model), 'lr': lr},
+        #                 {'params': R2Plus1D_model.get_10x_lr_params(model), 'lr': lr * 10}]
+        model = models.video.r2plus1d_18(pretrained=True, progress=True)
+        num_ftrs = model.fc.in_features
+        model.fc = nn.Linear(num_ftrs, 2)
+        model = model.to(device)
         train_params = model.parameters()
+    elif modelName == 'R3D':
+        # model = R3D_model.R3DClassifier(num_classes=num_classes, layer_sizes=(2, 2, 2, 2))
+        # train_params = model.parameters()
+        model = models.video.r3d_18(pretrained=True, progress=True)
+        train_params = model.parameters()
+        
+    elif modelName == 'I3D':
+        model = I3D.InceptionI3d(num_classes=400)
+        load_file = 'rgb_imagenet.pt'
+        model.load_state_dict(torch.load(load_file))
+        model.replace_logits(num_classes = 2)
+        train_params = model.parameters()
+
     else:
         print('We only implemented C3D and R2Plus1D models.')
         raise NotImplementedError
@@ -98,13 +119,16 @@ def train_model(dataset=dataset, save_dir=save_dir, num_classes=num_classes, lr=
     criterion.to(device)
 
     log_dir = os.path.join(save_dir, 'models', datetime.now().strftime('%b%d_%H-%M-%S') + '_' + socket.gethostname())
+    writer = SummaryWriter(log_dir=log_dir)
+
 
 
     print('Training model on {} dataset...'.format(dataset))
-    train_dataloader = DataLoader(VideoDataset(dataset=dataset, split='train',clip_len=16, preprocess=True), batch_size=10, shuffle=False, num_workers=4, )
-    val_dataloader   = DataLoader(VideoDataset(dataset=dataset, split='val',  clip_len=16), batch_size=10, num_workers=4 )
-    test_dataloader  = DataLoader(VideoDataset(dataset=dataset, split='test', clip_len=16), batch_size=10, num_workers=4)
-
+    train_dataloader = DataLoader(VideoDataset(dataset=dataset, split='train',clip_len=16, preprocess=False), batch_size= 6, shuffle=True, num_workers=4)
+    asjk
+    val_dataloader   = DataLoader(VideoDataset(dataset=dataset, split='val',  clip_len=16), batch_size=6, num_workers=6, shuffle = True )
+    test_dataloader  = DataLoader(VideoDataset(dataset=dataset, split='test', clip_len=16), batch_size=6, num_workers=6, shuffle = True)
+    
     trainval_loaders = {'train': train_dataloader, 'val': val_dataloader}
     trainval_sizes = {x: len(trainval_loaders[x].dataset) for x in ['train', 'val']}
     test_size = len(test_dataloader.dataset)
@@ -144,7 +168,10 @@ def train_model(dataset=dataset, save_dir=save_dir, num_classes=num_classes, lr=
                 
                 probs = nn.Softmax(dim=1)(outputs)
                 preds = torch.max(probs, 1)[1]
-                loss = criterion(outputs, labels)
+
+                print(outputs.size())
+                print(labels.size())
+                loss = criterion(outputs, labels.type(torch.long))
 
                 if phase == 'train':
                     loss.backward()
@@ -156,7 +183,9 @@ def train_model(dataset=dataset, save_dir=save_dir, num_classes=num_classes, lr=
                 #print("Outputs: ", outputs, " ", outputs.shape)
                 #print("Probs: ", probs, " ", probs.shape)
                 #print("Preds: ", preds, " ", preds.shape)
+                #print("Labels: ", labels )
                 #print("Loss: ", loss, " ", loss.shape)
+                
                 running_loss += loss.item() * inputs.size(0)
                 running_corrects += torch.sum(preds == labels.data)
                 #print("Running loss: ", running_loss)
@@ -165,7 +194,14 @@ def train_model(dataset=dataset, save_dir=save_dir, num_classes=num_classes, lr=
             epoch_loss = running_loss / trainval_sizes[phase]
             epoch_acc = running_corrects.double() / trainval_sizes[phase]
 
-
+            if phase == 'train':
+                writer.add_scalar('data/train_loss_epoch', epoch_loss, epoch)
+                writer.add_scalar('data/train_acc_epoch', epoch_acc, epoch)
+            else:
+                writer.add_scalar('data/val_loss_epoch', epoch_loss, epoch)
+                writer.add_scalar('data/val_acc_epoch', epoch_acc, epoch)
+                
+            save_loss(training_loss_history, val_loss_history)
 
             print("[{}] Epoch: {}/{} Loss: {} Acc: {}".format(phase, epoch+1, nEpochs, epoch_loss, epoch_acc))
             stop_time = timeit.default_timer()
@@ -197,7 +233,7 @@ def train_model(dataset=dataset, save_dir=save_dir, num_classes=num_classes, lr=
                     outputs = model(inputs)
                 probs = nn.Softmax(dim=1)(outputs)
                 preds = torch.max(probs, 1)[1]
-                loss = criterion(outputs, labels)
+                loss = criterion(outputs, labels.type(torch.long))
 
                 if type(cat_probs) != type(None):
                     cat_probs = torch.cat((cat_probs, probs), dim=0)
@@ -215,17 +251,20 @@ def train_model(dataset=dataset, save_dir=save_dir, num_classes=num_classes, lr=
             epoch_loss = running_loss / test_size
             epoch_acc = running_corrects.double() / test_size
 
-            
+            writer.add_scalar('data/test_loss_epoch', epoch_loss, epoch)
+            writer.add_scalar('data/test_acc_epoch', epoch_acc, epoch)
 
             print("[test] Epoch: {}/{} Loss: {} Acc: {}".format(epoch+1, nEpochs, epoch_loss, epoch_acc))
             stop_time = timeit.default_timer()
             print("Execution time: " + str(stop_time - start_time) + "\n")
+        
+        torch.save(model.state_dict(), "epoch_" + str(epoch) + "_I3D_RGB" )
 
-
+    writer.close()
 
 def save_roc_curve(labels, probs):
     print("Saving ROC Curve ...")
-    fpr, tpr, _ = roc_curve(labels.detach().numpy(), probs[:,1].squeeze().detach().numpy())
+    fpr, tpr, _ = roc_curve(labels.detach().cpu().numpy(), probs[:,1].squeeze().detach().cpu().numpy())
     np.save('fpr', fpr)
     np.save('tpr', fpr)
     roc_auc = auc(fpr, tpr)

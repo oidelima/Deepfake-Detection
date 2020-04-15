@@ -6,7 +6,11 @@ import cv2
 import numpy as np
 from torch.utils.data import Dataset
 from mypath import Path
+import matplotlib.pyplot as plt
+from tqdm import tqdm
 
+
+FLOW = True
 
 class VideoDataset(Dataset):
     r"""A Dataset for a folder of videos. Expects the directory structure to be
@@ -28,13 +32,13 @@ class VideoDataset(Dataset):
         self.split = split
 
         # The following three parameters are chosen as described in the paper section 4.1
-        self.resize_height = 128
-        self.resize_width = 171
-        self.crop_size = 112
+        self.resize_height = 256#128
+        self.resize_width = 256#171
+        self.crop_size = 224#112
 
-        if not self.check_integrity():
-            raise RuntimeError('Dataset not found or corrupted.' +
-                               ' You need to download it from official website.')
+        # if not self.check_integrity():
+        #     raise RuntimeError('Dataset not found or corrupted.' +
+        #                        ' You need to download it from official website.')
 
         if preprocess: # or (not self.check_preprocess())
             print('Preprocessing of {} dataset, this will take long, but it will be done only once.'.format(dataset))
@@ -148,13 +152,13 @@ class VideoDataset(Dataset):
                 os.mkdir(test_dir)
                 
 
-            for video in train:
+            for video in tqdm(train):
                 self.process_video(video, file, train_dir)
 
-            for video in val:
+            for video in tqdm(val):
                 self.process_video(video, file, val_dir)
 
-            for video in test:
+            for video in tqdm(test):
                 self.process_video(video, file, test_dir)
 
         print('Preprocessing finished.')
@@ -179,6 +183,10 @@ class VideoDataset(Dataset):
 
         if not os.path.exists(os.path.join(save_dir, video_filename)):
             os.mkdir(os.path.join(save_dir, video_filename))
+        else:
+            print("Folder found")
+            return
+            
 
         # Make sure splited video has at least 16 frames
         EXTRACT_FREQUENCY = 4
@@ -190,10 +198,11 @@ class VideoDataset(Dataset):
                     EXTRACT_FREQUENCY -= 1
 
         count = 0
+            
         i = 0
         retaining = True
         
-        
+        prev_gray = None
 
         while (count < frame_count and retaining):
             retaining, frame = capture.read()
@@ -202,13 +211,42 @@ class VideoDataset(Dataset):
 
             if count % EXTRACT_FREQUENCY == 0:
                 if (frame_height != self.resize_height) or (frame_width != self.resize_width):
-                    frame = cv2.resize(frame, (self.resize_width, self.resize_height))
-                cv2.imwrite(filename=os.path.join(save_dir, video_filename, '0000{}.jpg'.format(str(i))), img=frame)
+                    frame = cv2.resize(frame, (self.resize_width, self.resize_height)) 
+                
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                
+                if FLOW and type(prev_gray) != type(None):
+                    #flow = cv2.calcOpticalFlowFarneback(prev_gray, gray, None, 0.5, 3, 15, 3, 5, 1.2, 0)
+                    flow = self.compute_TVL1(prev_gray, gray)
+                    flow = np.concatenate((flow,np.zeros((flow.shape[0], flow.shape[1], 1))),axis=2)
+
+                    cv2.imwrite(filename=os.path.join(save_dir, video_filename, '0000{}.jpg'.format(str(i))), img=flow)
+
+                elif not FLOW:
+                    cv2.imwrite(filename=os.path.join(save_dir, video_filename, '0000{}.jpg'.format(str(i))), img=frame)
                 i += 1
             count += 1
+            
+            prev_gray = gray
 
         # Release the VideoCapture once it is no longer needed
         capture.release()
+
+    def compute_TVL1(self, prev, curr, bound=15):
+        """Compute the TV-L1 optical flow."""
+
+        TVL1 = cv2.optflow.DualTVL1OpticalFlow_create()
+        flow = TVL1.calc(prev, curr, None)
+        flow = np.clip(flow, -20,20) #default values are +20 and -20
+        #print(flow)
+        assert flow.dtype == np.float32
+
+        flow = (flow + bound) * (255.0 / (2*bound))
+        flow = np.round(flow).astype(int)
+        flow[flow >= 255] = 255
+        flow[flow <= 0] = 0
+
+        return flow
 
     def randomflip(self, buffer):
         """Horizontally flip the given image and ground truth randomly with a probability of 0.5."""
