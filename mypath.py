@@ -27,7 +27,7 @@ class Path(object):
             # folder that contains class labels
             root_dir = '../Downloads/Celeb-df-cropped'
 
-            output_dir = '../Downloads/Celeb-DF-v2-flow-processed-cropped'
+            output_dir = '../Downloads/Celeb-df-square-cropped'
 
             return root_dir, output_dir
         else:

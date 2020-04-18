@@ -71,7 +71,6 @@ class C3D(nn.Module):
         x = self.dropout(x)
         x = self.relu(self.fc7(x))
         x = self.dropout(x)
-
         logits = self.fc8(x)
 
         return logits

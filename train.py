@@ -27,7 +27,7 @@ import pickle
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print("Device being used:", device)
 
-nEpochs = 10  # Number of epochs for training
+nEpochs = 100  # Number of epochs for training
 resume_epoch = 0  # Default is 0, change if want to resume
 useTest = True # See evolution of the test set when training
 nTestInterval = 1 # Run on test set every nTestInterval epochs
@@ -59,7 +59,7 @@ else:
     run_id = int(runs[-1].split('_')[-1]) + 1 if runs else 0
 
 save_dir = os.path.join(save_dir_root, 'run', 'run_' + str(run_id))
-modelName = 'C3D' # Options: C3D or R2Plus1D or R3D or I3D
+modelName = 'R3D' # Options: C3D or R2Plus1D or R3D or I3D
 saveName = modelName + '-' + dataset
 
 def train_model(dataset=dataset, save_dir=save_dir, num_classes=num_classes, lr=lr,
@@ -87,32 +87,40 @@ def train_model(dataset=dataset, save_dir=save_dir, num_classes=num_classes, lr=
         # model = R3D_model.R3DClassifier(num_classes=num_classes, layer_sizes=(2, 2, 2, 2))
         # train_params = model.parameters()
         model = models.video.r3d_18(pretrained=True, progress=True)
+        num_ftrs = model.fc.in_features
+        model.fc = nn.Linear(num_ftrs, 2)
+        model = model.to(device)
         train_params = model.parameters()
         
     elif modelName == 'I3D':
         model = I3D.InceptionI3d(num_classes=400)
         load_file = 'rgb_imagenet.pt'
+        model = model.to(device)
         model.load_state_dict(torch.load(load_file))
         model.replace_logits(num_classes = 2)
         train_params = model.parameters()
 
+
     else:
         print('We only implemented C3D and R2Plus1D models.')
         raise NotImplementedError
-    criterion = nn.CrossEntropyLoss()  # standard crossentropy loss for classification
+    criterion = nn.CrossEntropyLoss(weight = torch.tensor([1.0/375, 1.0/4388])) # standard crossentropy loss for classification 
     optimizer = optim.SGD(train_params, lr=lr, momentum=0.9, weight_decay=5e-4)
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10,
                                           gamma=0.1)  # the scheduler divides the lr by 10 every 10 epochs
+    #sampler = torch.utils.data.WeightedRandomSampler([1.0/212, 1.0/4388], 8, replacement=True)
 
     if resume_epoch == 0:
         print("Training {} from scratch...".format(modelName))
     else:
-        checkpoint = torch.load(os.path.join(save_dir, 'checkpoints', saveName + '_epoch-' + str(resume_epoch - 1) + '.pth.tar'),
-                       map_location=lambda storage, loc: storage)   # Load all tensors onto the CPU
-        print("Initializing weights from: {}...".format(
-            os.path.join(save_dir, 'models', saveName + '_epoch-' + str(resume_epoch - 1) + '.pth.tar')))
+        #checkpoint = torch.load(os.path.join(save_dir, 'checkpoints', saveName + '_epoch-' + str(resume_epoch - 1) + '.pth.tar'),
+        #               map_location=lambda storage, loc: storage)   # Load all tensors onto the CPU
+        #print("Initializing weights from: {}...".format(
+        #    os.path.join(save_dir, 'models', saveName + '_epoch-' + str(resume_epoch - 1) + '.pth.tar')))
+        checkpoint = torch.load('run\\run_10\\models\\R2Plus1D-celeb-df_epoch-27.pth.tar', map_location=lambda storage, loc: storage)
         model.load_state_dict(checkpoint['state_dict'])
         optimizer.load_state_dict(checkpoint['opt_dict'])
+        print("Chekpoint loaded")
 
     print('Total params: %.2fM' % (sum(p.numel() for p in model.parameters()) / 1000000.0))
     model.to(device)
@@ -124,10 +132,9 @@ def train_model(dataset=dataset, save_dir=save_dir, num_classes=num_classes, lr=
 
 
     print('Training model on {} dataset...'.format(dataset))
-    train_dataloader = DataLoader(VideoDataset(dataset=dataset, split='train',clip_len=16, preprocess=False), batch_size= 6, shuffle=True, num_workers=4)
-    asjk
-    val_dataloader   = DataLoader(VideoDataset(dataset=dataset, split='val',  clip_len=16), batch_size=6, num_workers=6, shuffle = True )
-    test_dataloader  = DataLoader(VideoDataset(dataset=dataset, split='test', clip_len=16), batch_size=6, num_workers=6, shuffle = True)
+    train_dataloader = DataLoader(VideoDataset(dataset=dataset, split='train',clip_len=16, preprocess=False),  batch_size= 8, shuffle=True, num_workers=4)
+    val_dataloader   = DataLoader(VideoDataset(dataset=dataset, split='val',  clip_len=16),  batch_size=8, num_workers=4, shuffle = True )
+    test_dataloader  = DataLoader(VideoDataset(dataset=dataset, split='test', clip_len=16) , batch_size=8, num_workers=4, shuffle = True)
     
     trainval_loaders = {'train': train_dataloader, 'val': val_dataloader}
     trainval_sizes = {x: len(trainval_loaders[x].dataset) for x in ['train', 'val']}
@@ -136,7 +143,7 @@ def train_model(dataset=dataset, save_dir=save_dir, num_classes=num_classes, lr=
     training_loss_history = []
     val_loss_history = []
     for epoch in range(resume_epoch, num_epochs):
-        # each epoch has a training and validation step
+        #each epoch has a training and validation step
         for phase in ['train', 'val']:
             start_time = timeit.default_timer()
 
@@ -169,22 +176,21 @@ def train_model(dataset=dataset, save_dir=save_dir, num_classes=num_classes, lr=
                 probs = nn.Softmax(dim=1)(outputs)
                 preds = torch.max(probs, 1)[1]
 
-                print(outputs.size())
-                print(labels.size())
                 loss = criterion(outputs, labels.type(torch.long))
 
                 if phase == 'train':
                     loss.backward()
+                    #torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
                     optimizer.step()
                     training_loss_history.append(loss.item())
                 else:
                     val_loss_history.append(loss.item())
-                #print("Inputs: ", inputs, " ", inputs.shape)
+                # print("Inputs: ", inputs, " ", inputs.shape)
                 #print("Outputs: ", outputs, " ", outputs.shape)
                 #print("Probs: ", probs, " ", probs.shape)
-                #print("Preds: ", preds, " ", preds.shape)
+                # print("Preds: ", preds, " ", preds.shape)
                 #print("Labels: ", labels )
-                #print("Loss: ", loss, " ", loss.shape)
+                # print("Loss: ", loss, " ", loss.shape)
                 
                 running_loss += loss.item() * inputs.size(0)
                 running_corrects += torch.sum(preds == labels.data)
@@ -247,6 +253,8 @@ def train_model(dataset=dataset, save_dir=save_dir, num_classes=num_classes, lr=
                 running_corrects += torch.sum(preds == labels.data)
 
             save_roc_curve(cat_labels, cat_probs)
+            print("cat_probs", cat_probs.size())
+            print("cat_labels", cat_labels.size())
 
             epoch_loss = running_loss / test_size
             epoch_acc = running_corrects.double() / test_size
@@ -258,7 +266,7 @@ def train_model(dataset=dataset, save_dir=save_dir, num_classes=num_classes, lr=
             stop_time = timeit.default_timer()
             print("Execution time: " + str(stop_time - start_time) + "\n")
         
-        torch.save(model.state_dict(), "epoch_" + str(epoch) + "_I3D_RGB" )
+
 
     writer.close()
 

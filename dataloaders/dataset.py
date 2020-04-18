@@ -32,9 +32,9 @@ class VideoDataset(Dataset):
         self.split = split
 
         # The following three parameters are chosen as described in the paper section 4.1
-        self.resize_height = 256#128
-        self.resize_width = 256#171
-        self.crop_size = 224#112
+        self.resize_height = 128#256# 128
+        self.resize_width = 128#256#171
+        self.crop_size = 112#224#112#112
 
         # if not self.check_integrity():
         #     raise RuntimeError('Dataset not found or corrupted.' +
@@ -52,6 +52,8 @@ class VideoDataset(Dataset):
             for fname in os.listdir(os.path.join(folder, label)):
                 self.fnames.append(os.path.join(folder, label, fname))
                 labels.append(label)
+                
+            
 
         assert len(labels) == len(self.fnames)
         print('Number of {} videos: {:d}'.format(split, len(self.fnames)))
@@ -80,10 +82,7 @@ class VideoDataset(Dataset):
     def __getitem__(self, index):
         # Loading and preprocessing.
         buffer = self.load_frames(self.fnames[index])
-        #print("Name = ", self.fnames[index])
-        #print("Buffer shape = ", buffer.shape)
         
-
         buffer = self.crop(buffer, self.clip_len, self.crop_size)
         labels = np.array(self.label_array[index])
 
@@ -183,9 +182,7 @@ class VideoDataset(Dataset):
 
         if not os.path.exists(os.path.join(save_dir, video_filename)):
             os.mkdir(os.path.join(save_dir, video_filename))
-        else:
-            print("Folder found")
-            return
+
             
 
         # Make sure splited video has at least 16 frames
@@ -202,7 +199,7 @@ class VideoDataset(Dataset):
         i = 0
         retaining = True
         
-        prev_gray = None
+      
 
         while (count < frame_count and retaining):
             retaining, frame = capture.read()
@@ -212,22 +209,10 @@ class VideoDataset(Dataset):
             if count % EXTRACT_FREQUENCY == 0:
                 if (frame_height != self.resize_height) or (frame_width != self.resize_width):
                     frame = cv2.resize(frame, (self.resize_width, self.resize_height)) 
-                
-                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                
-                if FLOW and type(prev_gray) != type(None):
-                    #flow = cv2.calcOpticalFlowFarneback(prev_gray, gray, None, 0.5, 3, 15, 3, 5, 1.2, 0)
-                    flow = self.compute_TVL1(prev_gray, gray)
-                    flow = np.concatenate((flow,np.zeros((flow.shape[0], flow.shape[1], 1))),axis=2)
-
-                    cv2.imwrite(filename=os.path.join(save_dir, video_filename, '0000{}.jpg'.format(str(i))), img=flow)
-
-                elif not FLOW:
-                    cv2.imwrite(filename=os.path.join(save_dir, video_filename, '0000{}.jpg'.format(str(i))), img=frame)
+                printed = cv2.imwrite(filename=os.path.join(save_dir, video_filename, '0000{}.jpg'.format(str(i))), img=frame)
                 i += 1
             count += 1
             
-            prev_gray = gray
 
         # Release the VideoCapture once it is no longer needed
         capture.release()
@@ -297,6 +282,8 @@ class VideoDataset(Dataset):
                  width_index:width_index + crop_size, :]
 
         return buffer
+    
+
 
 
 
