@@ -17,10 +17,10 @@ ROC Curves           |  Test Accuracies
 ![alt text](ROC_results.png) |  ![alt text](Test_accuracy.png)
 
 Best test ROC-AUC Scores and Accuracies for the spatio-temporal  convolutional  methods  trained  on  Celeb-DF:
-![alt text](spatiotemporal_convolutional_network.PNG | width=48)
+<img src="https://github.com/oidelima/Deepfake-Detection/blob/master/spatiotemporal_convolutional_network.PNG" width="48">
 
 The power spectra informations for real and fake images in the Celeb-DF dataset (as obtained from the DFT method) is shown below.
-![alt text](Frame-based_results.PNG =100x20)
+![alt text](DFT.PNG)
 
 ## Acknowledgement
 
