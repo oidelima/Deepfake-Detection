@@ -22,7 +22,7 @@ Best test ROC-AUC Scores and Accuracies for the spatio-temporal  convolutional  
 
 The power spectra informations for real and fake images in the Celeb-DF dataset (as obtained from the DFT method) is shown below.
 <br />
-<img src="https://github.com/oidelima/Deepfake-Detection/blob/master/DFT.PNG" width="700">
+<img src="https://github.com/oidelima/Deepfake-Detection/blob/master/DFT.PNG" width="450">
 
 ## Acknowledgement
 
