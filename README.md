@@ -18,5 +18,15 @@ ROC Curves           |  Test Accuracies
 
 
 
+
 The power spectra informations for real and fake images in the Celeb-DF dataset is shown below.
 ![alt text](Frame-based results.PNG)
+
+## Acknowledgement
+
+Celeb-DF V2 Dataset: http://www.cs.albany.edu/~lsw/celeb-deepfakeforensics.html
+RetinaFace: https://github.com/biubug6/Pytorch_Retinaface  
+I3D Implementation: https://github.com/piergiaj/pytorch-i3d  
+RCN Implementation: https://github.com/chinmay5/FakeDetection
+
+
