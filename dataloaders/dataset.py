@@ -9,6 +9,8 @@ from mypath import Path
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
+np.random.seed(420)
+
 
 FLOW = True
 
@@ -32,9 +34,9 @@ class VideoDataset(Dataset):
         self.split = split
 
         # The following three parameters are chosen as described in the paper section 4.1
-        self.resize_height = 128#256# 128
-        self.resize_width = 128#256#171
-        self.crop_size = 112#224#112#112
+        self.resize_height = 256#128#256# 128
+        self.resize_width = 256#128#256#171
+        self.crop_size = 224#112#112
 
         # if not self.check_integrity():
         #     raise RuntimeError('Dataset not found or corrupted.' +
@@ -82,7 +84,6 @@ class VideoDataset(Dataset):
     def __getitem__(self, index):
         # Loading and preprocessing.
         buffer = self.load_frames(self.fnames[index])
-        
         buffer = self.crop(buffer, self.clip_len, self.crop_size)
         labels = np.array(self.label_array[index])
 
@@ -277,9 +278,11 @@ class VideoDataset(Dataset):
         # Crop and jitter the video using indexing. The spatial crop is performed on
         # the entire array, so each frame is cropped in the same location. The temporal
         # jitter takes place via the selection of consecutive frames
+        
         buffer = buffer[time_index:time_index + clip_len,
-                 height_index:height_index + crop_size,
-                 width_index:width_index + crop_size, :]
+                height_index:height_index + crop_size,
+                width_index:width_index + crop_size, :]
+
 
         return buffer
     

@@ -25,9 +25,9 @@ class Path(object):
             return root_dir, output_dir
         elif database == 'celeb-df':
             # folder that contains class labels
-            root_dir = '../Downloads/Celeb-df-cropped'
+            root_dir = '../Downloads/Celeb-df'
 
-            output_dir = '../Downloads/Celeb-df-square-cropped'
+            output_dir = '../Downloads/Celeb-DF-v2-I3D-processed-cropped'
 
             return root_dir, output_dir
         else:
