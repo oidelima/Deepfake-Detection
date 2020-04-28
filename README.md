@@ -24,7 +24,7 @@ The power spectra informations for real and fake images in the Celeb-DF dataset 
 <br />
 <img src="https://github.com/oidelima/Deepfake-Detection/blob/master/DFT.PNG" width="300">
 
-## Acknowledgement
+## Acknowledgements
 
 Celeb-DF V2 Dataset: http://www.cs.albany.edu/~lsw/celeb-deepfakeforensics.html
 <br />
